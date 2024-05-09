@@ -37,19 +37,29 @@ def get_body_position(results_pose):
         return (int(results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.NOSE].x * WINDOW_WIDTH),
                 int(results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.NOSE].y * WINDOW_HEIGHT))
 
-def get_hand_positions_and_rotations(results_hands):
-    hand_positions = []
-    hand_rotations = []
-    if results_hands.multi_hand_landmarks:
-        for hand_landmarks in results_hands.multi_hand_landmarks:
-            hand_position = (int(hand_landmarks.landmark[mp_hands.HandLandmark.WRIST].x * WINDOW_WIDTH),
-                             int(hand_landmarks.landmark[mp_hands.HandLandmark.WRIST].y * WINDOW_HEIGHT))
-            hand_positions.append(hand_position)
+def get_arm_positions_and_rotations(results_pose):
+    arm_positions = []
+    arm_rotations = []
+    if results_pose.pose_landmarks:
+        # Left arm
+        left_shoulder = results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.LEFT_SHOULDER]
+        left_elbow = results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.LEFT_ELBOW]
+        left_arm_position = (int(left_elbow.x * WINDOW_WIDTH), int(left_elbow.y * WINDOW_HEIGHT))
+        arm_positions.append(left_arm_position)
 
-            hand_rotation = math.atan2(hand_landmarks.landmark[mp_hands.HandLandmark.MIDDLE_FINGER_TIP].y - hand_landmarks.landmark[mp_hands.HandLandmark.WRIST].y,
-                                       hand_landmarks.landmark[mp_hands.HandLandmark.MIDDLE_FINGER_TIP].x - hand_landmarks.landmark[mp_hands.HandLandmark.WRIST].x)
-            hand_rotations.append(hand_rotation)
-    return hand_positions, hand_rotations
+        left_arm_rotation = math.atan2(left_elbow.y - left_shoulder.y, left_elbow.x - left_shoulder.x)
+        arm_rotations.append(left_arm_rotation)
+
+        # Right arm
+        right_shoulder = results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.RIGHT_SHOULDER]
+        right_elbow = results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.RIGHT_ELBOW]
+        right_arm_position = (int(right_elbow.x * WINDOW_WIDTH), int(right_elbow.y * WINDOW_HEIGHT))
+        arm_positions.append(right_arm_position)
+
+        right_arm_rotation = math.atan2(right_elbow.y - right_shoulder.y, right_elbow.x - right_shoulder.x)
+        arm_rotations.append(right_arm_rotation)
+
+    return arm_positions, arm_rotations
 
 def get_head_rotation(results_pose):
     if results_pose.pose_landmarks:
@@ -67,29 +77,37 @@ def draw_character(display, head_rotation):
     character_rect.midbottom = body_pos
     display.blit(character_img, character_rect)
 
-    hand_offset = 50  # Distance from body center
-    hand_positions = [
-        (character_rect.centerx - hand_offset, character_rect.centery),
-        (character_rect.centerx + hand_offset, character_rect.centery)
-    ]
-
-
-
     # Draw the head image on top of the body with rotation
     head_offset = (0, -head_img.get_height() // 2)  # Offset to position head on top of body
     rotated_head_img = pygame.transform.rotate(head_img, math.degrees(head_rotation))
     head_rect = rotated_head_img.get_rect(center=(400, 465))
     display.blit(rotated_head_img, head_rect)
 
+    # Define fixed positions for the hands
+    left_hand_pos = (character_rect.centerx - 50, character_rect.centery)
+    right_hand_pos = (character_rect.centerx + 50, character_rect.centery)
+
+    # Draw the hands at fixed positions
+    display.blit(left_hand_img, left_hand_pos)
+    display.blit(right_hand_img, right_hand_pos)
 
 
-def draw_hands(display, hand_positions, hand_rotations):
-    for i, hand_pos in enumerate(hand_positions):
-        hand_img_to_use = right_hand_img if i == 0 else left_hand_img
-        rotated_hand_img = pygame.transform.rotate(hand_img_to_use, math.degrees(hand_rotations[i]))
-        hand_rect = rotated_hand_img.get_rect()
-        hand_rect.center = hand_pos
-        display.blit(rotated_hand_img, hand_rect)
+def draw_arms(display, arm_positions, arm_rotations):
+    # Adjust this value to bring the arms closer to the body
+    arm_offset_x = 100
+
+    for i, arm_pos in enumerate(arm_positions):
+        arm_img_to_use = right_hand_img if i == 1 else left_hand_img
+        rotated_arm_img = pygame.transform.rotate(arm_img_to_use, math.degrees(arm_rotations[i]))
+        arm_rect = rotated_arm_img.get_rect()
+
+        # Adjust the arm position based on the offset
+        if i == 0:  # Left arm
+            arm_rect.center = (arm_pos[0] - arm_offset_x, arm_pos[1])
+        else:  # Right arm
+            arm_rect.center = (arm_pos[0] + arm_offset_x, arm_pos[1])
+
+        display.blit(rotated_arm_img, arm_rect)
 
 def main():
     with mp_hands.Hands(min_detection_confidence=0.5, min_tracking_confidence=0.5) as hands:
@@ -100,7 +118,7 @@ def main():
                     break
 
                 image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                results_hands = hands.process(image_rgb)
+                results_hands = hands.process(image_rgb)  # This is still needed for head rotation
                 results_pose = pose.process(image_rgb)
 
                 # Clear the display
@@ -109,8 +127,8 @@ def main():
                 # Get the user's body position
                 body_pos = get_body_position(results_pose)
 
-                # Get the user's hand positions and orientations
-                hand_positions, hand_rotations = get_hand_positions_and_rotations(results_hands)
+                # Get the user's arm positions and orientations
+                arm_positions, arm_rotations = get_arm_positions_and_rotations(results_pose)
 
                 # Get the head rotation
                 head_rotation = get_head_rotation(results_pose)
@@ -118,8 +136,8 @@ def main():
                 # Overlay the character image based on the tracked positions and rotations
                 draw_character(display, head_rotation)
 
-                # Overlay the hand images based on the tracked positions and rotations
-                draw_hands(display, hand_positions, hand_rotations)
+                # Overlay the arm images based on the tracked positions and rotations
+                draw_arms(display, arm_positions, arm_rotations)
 
                 # Update the display
                 pygame.display.update()
