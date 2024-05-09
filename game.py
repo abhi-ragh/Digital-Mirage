@@ -15,8 +15,8 @@ pygame.display.set_caption("2D Character Tracking")
 # Load character images
 head_img = pygame.transform.rotate(pygame.image.load("models/head.png").convert_alpha(), 180)
 body_img = pygame.image.load("models/body.png").convert_alpha()
-left_hand_img = pygame.image.load("models/left_hand.png").convert_alpha()
-right_hand_img = pygame.image.load("models/right_hand.png").convert_alpha()
+left_hand_img = pygame.image.load("models/right_hand.png").convert_alpha()
+right_hand_img = pygame.image.load("models/left_hand.png").convert_alpha()
 
 # Combine the character images
 character_height = head_img.get_height() + body_img.get_height()
@@ -26,40 +26,10 @@ character_img.blit(head_img, (body_img.get_width() // 2 - head_img.get_width() /
 
 # Set up MediaPipe
 mp_drawing = mp.solutions.drawing_utils
-mp_hands = mp.solutions.hands
 mp_pose = mp.solutions.pose
 
 # Open the camera
 cap = cv2.VideoCapture(0)
-
-def get_body_position(results_pose):
-    if results_pose.pose_landmarks:
-        return (int(results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.NOSE].x * WINDOW_WIDTH),
-                int(results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.NOSE].y * WINDOW_HEIGHT))
-
-def get_arm_positions_and_rotations(results_pose):
-    arm_positions = []
-    arm_rotations = []
-    if results_pose.pose_landmarks:
-        # Left arm
-        left_shoulder = results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.LEFT_SHOULDER]
-        left_elbow = results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.LEFT_ELBOW]
-        left_arm_position = (int(left_elbow.x * WINDOW_WIDTH), int(left_elbow.y * WINDOW_HEIGHT))
-        arm_positions.append(left_arm_position)
-
-        left_arm_rotation = math.atan2(left_elbow.y - left_shoulder.y, left_elbow.x - left_shoulder.x)
-        arm_rotations.append(left_arm_rotation)
-
-        # Right arm
-        right_shoulder = results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.RIGHT_SHOULDER]
-        right_elbow = results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.RIGHT_ELBOW]
-        right_arm_position = (int(right_elbow.x * WINDOW_WIDTH), int(right_elbow.y * WINDOW_HEIGHT))
-        arm_positions.append(right_arm_position)
-
-        right_arm_rotation = math.atan2(right_elbow.y - right_shoulder.y, right_elbow.x - right_shoulder.x)
-        arm_rotations.append(right_arm_rotation)
-
-    return arm_positions, arm_rotations
 
 def get_head_rotation(results_pose):
     if results_pose.pose_landmarks:
@@ -83,72 +53,79 @@ def draw_character(display, head_rotation):
     head_rect = rotated_head_img.get_rect(center=(400, 465))
     display.blit(rotated_head_img, head_rect)
 
-    # Define fixed positions for the hands
-    left_hand_pos = (character_rect.centerx - 50, character_rect.centery)
-    right_hand_pos = (character_rect.centerx + 50, character_rect.centery)
+    return character_rect
 
-    # Draw the hands at fixed positions
-    display.blit(left_hand_img, left_hand_pos)
-    display.blit(right_hand_img, right_hand_pos)
+def get_arm_rotations(results_pose):
+    arm_rotations = [0, 0]  # Initialize with default values
+    if results_pose.pose_landmarks:
+        # Left arm
+        left_shoulder = results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.LEFT_SHOULDER]
+        left_elbow = results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.LEFT_ELBOW]
+        if left_shoulder and left_elbow:
+            arm_rotations[0] = math.atan2(left_elbow.y - left_shoulder.y, left_elbow.x - left_shoulder.x)
+
+        # Right arm
+        right_shoulder = results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.RIGHT_SHOULDER]
+        right_elbow = results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.RIGHT_ELBOW]
+        if right_shoulder and right_elbow:
+            arm_rotations[1] = math.atan2(right_elbow.y - right_shoulder.y, right_elbow.x - right_shoulder.x)
+
+    arm_rotations[0] = arm_rotations[0] - 1.52
+    arm_rotations[1] = arm_rotations[1] - 1.52
 
 
-def draw_arms(display, arm_positions, arm_rotations):
-    # Adjust this value to bring the arms closer to the body
-    arm_offset_x = 100
+    return arm_rotations
 
-    for i, arm_pos in enumerate(arm_positions):
-        arm_img_to_use = right_hand_img if i == 1 else left_hand_img
-        rotated_arm_img = pygame.transform.rotate(arm_img_to_use, math.degrees(arm_rotations[i]))
-        arm_rect = rotated_arm_img.get_rect()
+def draw_arms(display, arm_rotations, character_rect):
+    # Define fixed positions for the arms
+    left_arm_pos = (355, 495)
+    right_arm_pos = (445, 480)
 
-        # Adjust the arm position based on the offset
-        if i == 0:  # Left arm
-            arm_rect.center = (arm_pos[0] - arm_offset_x, arm_pos[1])
-        else:  # Right arm
-            arm_rect.center = (arm_pos[0] + arm_offset_x, arm_pos[1])
+    # Draw the arms at fixed positions with rotations
+    rotated_left_arm_img = pygame.transform.rotate(left_hand_img, math.degrees(arm_rotations[0]))
+    rotated_right_arm_img = pygame.transform.rotate(right_hand_img, math.degrees(arm_rotations[1]))
 
-        display.blit(rotated_arm_img, arm_rect)
+    left_arm_rect = rotated_left_arm_img.get_rect(center=left_arm_pos)
+    right_arm_rect = rotated_right_arm_img.get_rect(center=right_arm_pos)
+
+    display.blit(rotated_left_arm_img, left_arm_rect)
+    display.blit(rotated_right_arm_img, right_arm_rect)
 
 def main():
-    with mp_hands.Hands(min_detection_confidence=0.5, min_tracking_confidence=0.5) as hands:
-        with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
-            while cap.isOpened():
-                ret, frame = cap.read()
-                if not ret:
-                    break
+    with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
 
-                image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                results_hands = hands.process(image_rgb)  # This is still needed for head rotation
-                results_pose = pose.process(image_rgb)
+            image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            results_pose = pose.process(image_rgb)
 
-                # Clear the display
-                display.fill((255, 255, 255))
+            # Clear the display
+            display.fill((255, 255, 255))
 
-                # Get the user's body position
-                body_pos = get_body_position(results_pose)
+            # Get the head rotation
+            head_rotation = get_head_rotation(results_pose)
 
-                # Get the user's arm positions and orientations
-                arm_positions, arm_rotations = get_arm_positions_and_rotations(results_pose)
+            # Overlay the character image based on the tracked positions and rotations
+            character_rect = draw_character(display, head_rotation)
 
-                # Get the head rotation
-                head_rotation = get_head_rotation(results_pose)
+            # Get the user's arm rotations
+            arm_rotations = get_arm_rotations(results_pose)
 
-                # Overlay the character image based on the tracked positions and rotations
-                draw_character(display, head_rotation)
+            # Overlay the arm images based on the tracked positions and rotations
+            draw_arms(display, arm_rotations, character_rect)
 
-                # Overlay the arm images based on the tracked positions and rotations
-                draw_arms(display, arm_positions, arm_rotations)
+            # Update the display
+            pygame.display.update()
 
-                # Update the display
-                pygame.display.update()
-
-                # Check for the 'q' key to quit
-                for event in pygame.event.get():
-                    if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_q):
-                        cap.release()
-                        cv2.destroyAllWindows()
-                        pygame.quit()
-                        exit()
+            # Check for the 'q' key to quit
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_q):
+                    cap.release()
+                    cv2.destroyAllWindows()
+                    pygame.quit()
+                    exit()
 
 if __name__ == "__main__":
     main()
