@@ -15,8 +15,8 @@ pygame.display.set_caption("2D Character Tracking")
 # Load character images
 head_img = pygame.transform.rotate(pygame.image.load("models/head.png").convert_alpha(), 180)
 body_img = pygame.transform.rotate(pygame.image.load("models/body.png").convert_alpha(), 180)
-hand_img = pygame.image.load("models/hand.png").convert_alpha()
-right_hand_img = pygame.transform.flip(hand_img, True, False)
+left_hand_img = pygame.image.load("models/left_hand.png").convert_alpha()
+right_hand_img = pygame.image.load("models/right_hand.png").convert_alpha()
 
 # Combine the character images
 character_height = head_img.get_height() + body_img.get_height()
@@ -85,7 +85,7 @@ with mp_hands.Hands(min_detection_confidence=0.5, min_tracking_confidence=0.5) a
 
             # Overlay the hand images based on the tracked positions and rotations
             for i, hand_pos in enumerate(hand_positions):
-                hand_img_to_use = hand_img if i == 0 else right_hand_img
+                hand_img_to_use = right_hand_img if i == 0 else left_hand_img
                 rotated_hand_img = pygame.transform.rotate(hand_img_to_use, math.degrees(hand_rotations[i]))
                 hand_rect = rotated_hand_img.get_rect()
                 hand_rect.center = hand_pos
