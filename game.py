@@ -17,6 +17,8 @@ head_img = pygame.transform.rotate(pygame.image.load("models/head.png").convert_
 body_img = pygame.image.load("models/body.png").convert_alpha()
 left_hand_img = pygame.image.load("models/right_hand.png").convert_alpha()
 right_hand_img = pygame.image.load("models/left_hand.png").convert_alpha()
+left_forearm_img = pygame.image.load("models/right_forearm.png").convert_alpha()
+right_forearm_img = pygame.image.load("models/left_forearm.png").convert_alpha()
 
 # Combine the character images
 character_height = head_img.get_height() + body_img.get_height()
@@ -56,40 +58,62 @@ def draw_character(display, head_rotation):
     return character_rect
 
 def get_arm_rotations(results_pose):
-    arm_rotations = [0, 0]  # Initialize with default values
+    arm_rotations = [0, 0, 0, 0]  # Initialize with default values [left_upper_arm, right_upper_arm, left_forearm, right_forearm]
     if results_pose.pose_landmarks:
         # Left arm
         left_shoulder = results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.LEFT_SHOULDER]
         left_elbow = results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.LEFT_ELBOW]
+        left_wrist = results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.LEFT_WRIST]
         if left_shoulder and left_elbow:
             arm_rotations[0] = math.atan2(left_elbow.y - left_shoulder.y, left_elbow.x - left_shoulder.x)
+        if left_elbow and left_wrist:
+            arm_rotations[2] = math.atan2(left_wrist.y - left_elbow.y, left_wrist.x - left_elbow.x)
 
         # Right arm
         right_shoulder = results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.RIGHT_SHOULDER]
         right_elbow = results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.RIGHT_ELBOW]
+        right_wrist = results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.RIGHT_WRIST]
         if right_shoulder and right_elbow:
             arm_rotations[1] = math.atan2(right_elbow.y - right_shoulder.y, right_elbow.x - right_shoulder.x)
+        if right_elbow and right_wrist:
+            arm_rotations[3] = math.atan2(right_wrist.y - right_elbow.y, right_wrist.x - right_elbow.x)
 
+    # Adjust the rotation angles as per your requirements
     arm_rotations[0] = arm_rotations[0] - 1.52
     arm_rotations[1] = arm_rotations[1] - 1.52
-
+    arm_rotations[2] = arm_rotations[2] - 1.52
+    arm_rotations[3] = arm_rotations[3] - 1.52
 
     return arm_rotations
 
 def draw_arms(display, arm_rotations, character_rect):
     # Define fixed positions for the arms
     left_arm_pos = (355, 495)
+    left_forearm_pos = (330, 540)
+    
     right_arm_pos = (445, 480)
+    right_forearm_pos = (480, 520)
 
     # Draw the arms at fixed positions with rotations
-    rotated_left_arm_img = pygame.transform.rotate(left_hand_img, math.degrees(arm_rotations[0]))
-    rotated_right_arm_img = pygame.transform.rotate(right_hand_img, math.degrees(arm_rotations[1]))
+    rotated_left_hand_img = pygame.transform.rotate(left_hand_img, math.degrees(arm_rotations[0]))
+    rotated_right_hand_img = pygame.transform.rotate(right_hand_img, math.degrees(arm_rotations[1]))
 
-    left_arm_rect = rotated_left_arm_img.get_rect(center=left_arm_pos)
-    right_arm_rect = rotated_right_arm_img.get_rect(center=right_arm_pos)
+    rotated_left_forearm_img = pygame.transform.rotate(left_forearm_img, math.degrees(arm_rotations[2]))
+    rotated_right_forearm_img = pygame.transform.rotate(right_forearm_img, math.degrees(arm_rotations[3]))
 
-    display.blit(rotated_left_arm_img, left_arm_rect)
-    display.blit(rotated_right_arm_img, right_arm_rect)
+    left_hand_rect = rotated_left_hand_img.get_rect(center=left_arm_pos)
+    right_hand_rect = rotated_right_hand_img.get_rect(center=right_arm_pos)
+
+    left_forearm_rect = rotated_left_forearm_img.get_rect(center=left_forearm_pos)
+    #left_forearm_rect.midtop = left_hand_rect.midbottom
+
+    right_forearm_rect = rotated_right_forearm_img.get_rect(center=right_forearm_pos)
+    #right_forearm_rect.midtop = right_hand_rect.midbottom
+
+    display.blit(rotated_left_hand_img, left_hand_rect)
+    display.blit(rotated_right_hand_img, right_hand_rect)
+    display.blit(rotated_left_forearm_img, left_forearm_rect)
+    display.blit(rotated_right_forearm_img, right_forearm_rect)
 
 def main():
     with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
