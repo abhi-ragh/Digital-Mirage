@@ -14,7 +14,7 @@ pygame.display.set_caption("2D Character Tracking")
 
 # Load character images
 head_img = pygame.transform.rotate(pygame.image.load("models/head.png").convert_alpha(), 180)
-body_img = pygame.transform.rotate(pygame.image.load("models/body.png").convert_alpha(), 180)
+body_img = pygame.image.load("models/body.png").convert_alpha()
 left_hand_img = pygame.image.load("models/left_hand.png").convert_alpha()
 right_hand_img = pygame.image.load("models/right_hand.png").convert_alpha()
 
@@ -32,72 +32,105 @@ mp_pose = mp.solutions.pose
 # Open the camera
 cap = cv2.VideoCapture(0)
 
-with mp_hands.Hands(min_detection_confidence=0.5, min_tracking_confidence=0.5) as hands:
-    with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                break
+def get_body_position(results_pose):
+    if results_pose.pose_landmarks:
+        return (int(results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.NOSE].x * WINDOW_WIDTH),
+                int(results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.NOSE].y * WINDOW_HEIGHT))
 
-            image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            results_hands = hands.process(image_rgb)
-            results_pose = pose.process(image_rgb)
+def get_hand_positions_and_rotations(results_hands):
+    hand_positions = []
+    hand_rotations = []
+    if results_hands.multi_hand_landmarks:
+        for hand_landmarks in results_hands.multi_hand_landmarks:
+            hand_position = (int(hand_landmarks.landmark[mp_hands.HandLandmark.WRIST].x * WINDOW_WIDTH),
+                             int(hand_landmarks.landmark[mp_hands.HandLandmark.WRIST].y * WINDOW_HEIGHT))
+            hand_positions.append(hand_position)
 
-            # Clear the display
-            display.fill((255, 255, 255))
+            hand_rotation = math.atan2(hand_landmarks.landmark[mp_hands.HandLandmark.MIDDLE_FINGER_TIP].y - hand_landmarks.landmark[mp_hands.HandLandmark.WRIST].y,
+                                       hand_landmarks.landmark[mp_hands.HandLandmark.MIDDLE_FINGER_TIP].x - hand_landmarks.landmark[mp_hands.HandLandmark.WRIST].x)
+            hand_rotations.append(hand_rotation)
+    return hand_positions, hand_rotations
 
-            # Get the user's body position
-            body_pos = None
+def get_head_rotation(results_pose):
+    if results_pose.pose_landmarks:
+        left_eye = results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.LEFT_EYE]
+        right_eye = results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.RIGHT_EYE]
+        return math.atan2(right_eye.y - left_eye.y, right_eye.x - left_eye.x)
+    return 0
 
-            if results_pose.pose_landmarks:
-                body_pos = (int(results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.NOSE].x * WINDOW_WIDTH),
-                            int(results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.NOSE].y * WINDOW_HEIGHT))
+def draw_character(display, head_rotation):
+    # Define fixed position for the body image
+    body_pos = (WINDOW_WIDTH // 2, WINDOW_HEIGHT + 400)
 
-            # Get the user's hand positions and orientations
-            hand_positions = []
-            hand_rotations = []
+    # Draw the body image without rotation
+    character_rect = character_img.get_rect()
+    character_rect.midbottom = body_pos
+    display.blit(character_img, character_rect)
 
-            if results_hands.multi_hand_landmarks:
-                for hand_landmarks in results_hands.multi_hand_landmarks:
-                    hand_position = (int(hand_landmarks.landmark[mp_hands.HandLandmark.WRIST].x * WINDOW_WIDTH),
-                                     int(hand_landmarks.landmark[mp_hands.HandLandmark.WRIST].y * WINDOW_HEIGHT))
-                    hand_positions.append(hand_position)
+    hand_offset = 50  # Distance from body center
+    hand_positions = [
+        (character_rect.centerx - hand_offset, character_rect.centery),
+        (character_rect.centerx + hand_offset, character_rect.centery)
+    ]
 
-                    hand_rotation = math.atan2(hand_landmarks.landmark[mp_hands.HandLandmark.MIDDLE_FINGER_TIP].y - hand_landmarks.landmark[mp_hands.HandLandmark.WRIST].y,
-                                               hand_landmarks.landmark[mp_hands.HandLandmark.MIDDLE_FINGER_TIP].x - hand_landmarks.landmark[mp_hands.HandLandmark.WRIST].x)
-                    hand_rotations.append(hand_rotation)
 
-            # Get the head rotation
-            head_rotation = 0
-            if results_pose.pose_landmarks:
-                nose = results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.NOSE]
-                left_eye = results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.LEFT_EYE]
-                right_eye = results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.RIGHT_EYE]
-                head_rotation = math.atan2(right_eye.y - left_eye.y, right_eye.x - left_eye.x)
 
-            # Overlay the character image based on the tracked positions and rotations
-            if body_pos:
-                character_rect = character_img.get_rect()
-                character_rect.midbottom = (body_pos[0], WINDOW_HEIGHT)
-                rotated_character_img = pygame.transform.rotate(character_img, math.degrees(head_rotation))
-                rotated_character_rect = rotated_character_img.get_rect(center=character_rect.center)
-                display.blit(rotated_character_img, rotated_character_rect)
+    # Draw the head image on top of the body with rotation
+    head_offset = (0, -head_img.get_height() // 2)  # Offset to position head on top of body
+    rotated_head_img = pygame.transform.rotate(head_img, math.degrees(head_rotation))
+    head_rect = rotated_head_img.get_rect(center=(400, 465))
+    display.blit(rotated_head_img, head_rect)
 
-            # Overlay the hand images based on the tracked positions and rotations
-            for i, hand_pos in enumerate(hand_positions):
-                hand_img_to_use = right_hand_img if i == 0 else left_hand_img
-                rotated_hand_img = pygame.transform.rotate(hand_img_to_use, math.degrees(hand_rotations[i]))
-                hand_rect = rotated_hand_img.get_rect()
-                hand_rect.center = hand_pos
-                display.blit(rotated_hand_img, hand_rect)
 
-            # Update the display
-            pygame.display.update()
 
-            # Check for the 'q' key to quit
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_q):
-                    cap.release()
-                    cv2.destroyAllWindows()
-                    pygame.quit()
-                    exit()
+def draw_hands(display, hand_positions, hand_rotations):
+    for i, hand_pos in enumerate(hand_positions):
+        hand_img_to_use = right_hand_img if i == 0 else left_hand_img
+        rotated_hand_img = pygame.transform.rotate(hand_img_to_use, math.degrees(hand_rotations[i]))
+        hand_rect = rotated_hand_img.get_rect()
+        hand_rect.center = hand_pos
+        display.blit(rotated_hand_img, hand_rect)
+
+def main():
+    with mp_hands.Hands(min_detection_confidence=0.5, min_tracking_confidence=0.5) as hands:
+        with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
+            while cap.isOpened():
+                ret, frame = cap.read()
+                if not ret:
+                    break
+
+                image_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                results_hands = hands.process(image_rgb)
+                results_pose = pose.process(image_rgb)
+
+                # Clear the display
+                display.fill((255, 255, 255))
+
+                # Get the user's body position
+                body_pos = get_body_position(results_pose)
+
+                # Get the user's hand positions and orientations
+                hand_positions, hand_rotations = get_hand_positions_and_rotations(results_hands)
+
+                # Get the head rotation
+                head_rotation = get_head_rotation(results_pose)
+
+                # Overlay the character image based on the tracked positions and rotations
+                draw_character(display, head_rotation)
+
+                # Overlay the hand images based on the tracked positions and rotations
+                draw_hands(display, hand_positions, hand_rotations)
+
+                # Update the display
+                pygame.display.update()
+
+                # Check for the 'q' key to quit
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_q):
+                        cap.release()
+                        cv2.destroyAllWindows()
+                        pygame.quit()
+                        exit()
+
+if __name__ == "__main__":
+    main()
