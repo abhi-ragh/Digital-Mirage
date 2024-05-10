@@ -10,13 +10,18 @@ WINDOW_HEIGHT = 600
 display = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
 pygame.display.set_caption("2D Character Tracking")
 
-# Load character images
+air_index = 100
+
 head_img = pygame.transform.rotate(pygame.image.load("models/head.png").convert_alpha(), 180)
 body_img = pygame.image.load("models/body.png").convert_alpha()
 left_hand_img = pygame.image.load("models/right_hand.png").convert_alpha()
 right_hand_img = pygame.image.load("models/left_hand.png").convert_alpha()
 left_forearm_img = pygame.image.load("models/right_forearm.png").convert_alpha()
 right_forearm_img = pygame.image.load("models/left_forearm.png").convert_alpha()
+
+
+head_mask_img = pygame.transform.rotate(pygame.image.load("models/head_mask.png").convert_alpha(), 180)
+
 
 character_height = head_img.get_height() + body_img.get_height()
 character_img = pygame.Surface((body_img.get_width(), character_height), pygame.SRCALPHA)
@@ -28,6 +33,24 @@ mp_pose = mp.solutions.pose
 
 cap = cv2.VideoCapture(0)
 
+def handle_air_index_keys(event):
+    global air_index
+    if event.type == pygame.KEYDOWN:
+        if event.key == pygame.K_UP:
+            air_index = min(air_index + 10, 100)
+        elif event.key == pygame.K_DOWN:
+            air_index = max(air_index - 10, 0)
+
+def draw_air_index(display, air_index):
+    font = pygame.font.Font(None, 36)
+    text = font.render(f"Air Index: {air_index}", True, (0, 0, 0))
+    display.blit(text, (WINDOW_WIDTH - text.get_width() - 10, 10))
+
+def draw_air_quality_message(display, message):
+    font = pygame.font.Font(None, 36)
+    text = font.render(message, True, (0, 0, 0))
+    display.blit(text, (100, 100))
+
 def get_head_rotation(results_pose):
     if results_pose.pose_landmarks:
         left_eye = results_pose.pose_landmarks.landmark[mp_pose.PoseLandmark.LEFT_EYE]
@@ -35,14 +58,14 @@ def get_head_rotation(results_pose):
         return math.atan2(right_eye.y - left_eye.y, right_eye.x - left_eye.x)
     return 0
 
-def draw_character(display, head_rotation):
+def draw_character(display, head_rotation, head_img):
     body_pos = (WINDOW_WIDTH // 2, WINDOW_HEIGHT + 400)
 
     character_rect = character_img.get_rect()
     character_rect.midbottom = body_pos
     display.blit(character_img, character_rect)
 
-    head_offset = (0, -head_img.get_height() // 2) 
+    head_offset = (0, -head_img.get_height() // 2)
     rotated_head_img = pygame.transform.rotate(head_img, math.degrees(head_rotation))
     head_rect = rotated_head_img.get_rect(center=(400, 465))
     display.blit(rotated_head_img, head_rect)
@@ -121,11 +144,16 @@ def main():
 
             head_rotation = get_head_rotation(results_pose)
 
-            character_rect = draw_character(display, head_rotation)
+            if air_index < 40:
+                character_rect = draw_character(display, head_rotation, head_mask_img)
+                draw_air_quality_message(display, "Feeling the air's not right?Remember to Wear Your Mask!")
+            else:
+                character_rect = draw_character(display, head_rotation, head_img)
 
             arm_rotations = get_arm_rotations(results_pose)
-
             draw_arms(display, arm_rotations, character_rect)
+
+            draw_air_index(display, air_index)
 
             pygame.display.update()
 
@@ -135,6 +163,7 @@ def main():
                     cv2.destroyAllWindows()
                     pygame.quit()
                     exit()
+                handle_air_index_keys(event)
 
 if __name__ == "__main__":
     main()
