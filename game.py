@@ -185,6 +185,9 @@ def main():
             else:
                 character_rect = draw_character(display, head_rotation, head_img, temp)
 
+            if temp < 15:
+                draw_air_quality_message(display, "The cold can be deceptive. Stay warm, and Stay safe.")
+
             arm_rotations = get_arm_rotations(results_pose)
             draw_arms(display, arm_rotations, character_rect, temp)
 
